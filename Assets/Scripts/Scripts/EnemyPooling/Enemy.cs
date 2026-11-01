@@ -1,11 +1,20 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(Health), typeof(EnemyView))]
+[RequireComponent(typeof(Health), typeof(EnemyView), typeof(PathMover), typeof(EnemyRoutePlanningSession))]
 public abstract class Enemy : MonoBehaviour
 {
+    [SerializeField, Min(1)] private int _damage = 1;
+
     private Health _health;
+    private PathMover _mover;
+    private EnemyRoutePlanningSession _planning;
     private Board _board;
+    private GridMapper _mapper;
+    private BoardHighlighter _highlighter;
+    private StepResolver _stepResolver;
     private Unit _unit;
     private bool _isPrepared;
 
@@ -35,7 +44,7 @@ public abstract class Enemy : MonoBehaviour
         Prepare();
     }
 
-    public void Spawn(Board board, GridMapper mapper, Vector2Int cell)
+    public void Spawn(Board board, GridMapper mapper, BoardHighlighter highlighter, Vector2Int cell)
     {
         Prepare();
 
@@ -54,6 +63,9 @@ public abstract class Enemy : MonoBehaviour
         }
 
         _board = board;
+        _mapper = mapper;
+        _highlighter = highlighter;
+        _stepResolver = new StepResolver(board);
         _unit = unit;
         Behaviour = CreateBehaviour();
         transform.position = mapper.CellToWorld(cell);
@@ -72,8 +84,28 @@ public abstract class Enemy : MonoBehaviour
         _health.Died -= OnDied;
         _board.TryRemove(_unit);
         _board = null;
+        _mapper = null;
+        _highlighter = null;
+        _stepResolver = null;
         _unit = null;
         Behaviour = null;
+    }
+
+    public IEnumerator TakeTurn()
+    {
+        if (!IsSpawned)
+        {
+            yield break;
+        }
+
+        IReadOnlyList<Vector2Int> route = null;
+
+        yield return _planning.Plan(_board, _mapper, _highlighter, Cell, Behaviour.Steps, r => route = r);
+
+        if (route != null)
+        {
+            yield return FollowRoute(route);
+        }
     }
 
     protected abstract EnemyBehaviour CreateBehaviour();
@@ -81,6 +113,39 @@ public abstract class Enemy : MonoBehaviour
     protected virtual void OnDied()
     {
         DespawnRequested?.Invoke(this);
+    }
+
+    private IEnumerator FollowRoute(IReadOnlyList<Vector2Int> route)
+    {
+        for (int i = 1; i < route.Count; i++)
+        {
+            if (!IsSpawned)
+            {
+                yield break;
+            }
+
+            Vector2Int target = route[i];
+            StepKind step = _stepResolver.Resolve(_unit, target, out Unit occupant);
+
+            if (step == StepKind.Blocked)
+            {
+                yield break;
+            }
+
+            if (step == StepKind.Attack)
+            {
+                occupant.Damageable.TakeDamage(new DamageInfo(_damage));
+
+                yield break;
+            }
+
+            if (!_board.TryMove(_unit, target))
+            {
+                yield break;
+            }
+
+            yield return _mover.MoveTo(_mapper.CellToWorld(target));
+        }
     }
 
     private void Prepare()
@@ -91,6 +156,8 @@ public abstract class Enemy : MonoBehaviour
         }
 
         _health = GetComponent<Health>();
+        _mover = GetComponent<PathMover>();
+        _planning = GetComponent<EnemyRoutePlanningSession>();
         View = GetComponent<EnemyView>();
         _isPrepared = true;
     }

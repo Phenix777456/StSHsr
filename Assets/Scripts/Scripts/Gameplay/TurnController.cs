@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public sealed class TurnController : MonoBehaviour
@@ -30,6 +32,7 @@ public sealed class TurnController : MonoBehaviour
     private void OnDisable()
     {
         _player.TurnFinished -= OnPlayerTurnFinished;
+        StopAllCoroutines();
     }
 
     private void Start()
@@ -47,6 +50,18 @@ public sealed class TurnController : MonoBehaviour
 
     private void OnPlayerTurnFinished()
     {
+        StartCoroutine(EnemyPhase());
+    }
+
+    private IEnumerator EnemyPhase()
+    {
+        var enemies = new List<Enemy>(_enemySpawner.Active);
+
+        foreach (Enemy enemy in enemies)
+        {
+            yield return enemy.TakeTurn();
+        }
+
         _player.BeginTurn();
     }
 }

@@ -3,6 +3,7 @@ using UnityEngine;
 public sealed class CubeEnemy : Enemy
 {
     [SerializeField] private Color _color = Color.red;
+    [SerializeField] private EnemyMovePattern _pattern;
 
     protected override void Awake()
     {
@@ -12,6 +13,6 @@ public sealed class CubeEnemy : Enemy
 
     protected override EnemyBehaviour CreateBehaviour()
     {
-        return new EnemyBehaviour();
+        return new EnemyBehaviour(_pattern);
     }
 }
