@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -59,9 +60,22 @@ public sealed class TurnController : MonoBehaviour
 
         foreach (Enemy enemy in enemies)
         {
-            yield return enemy.TakeTurn();
+            yield return RunEnemyTurn(enemy);
         }
 
         _player.BeginTurn();
+    }
+
+    private static IEnumerator RunEnemyTurn(Enemy enemy)
+    {
+        bool isFinished = false;
+        Action onFinished = () => isFinished = true;
+
+        enemy.TurnFinished += onFinished;
+        enemy.BeginTurn();
+
+        yield return new WaitUntil(() => isFinished || !enemy.IsSpawned);
+
+        enemy.TurnFinished -= onFinished;
     }
 }

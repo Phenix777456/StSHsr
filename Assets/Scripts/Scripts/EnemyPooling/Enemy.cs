@@ -17,8 +17,10 @@ public abstract class Enemy : MonoBehaviour
     private StepResolver _stepResolver;
     private Unit _unit;
     private bool _isPrepared;
+    private bool _isTurnActive;
 
     public event Action<Enemy> DespawnRequested;
+    public event Action TurnFinished;
 
     public bool IsSpawned { get; private set; }
 
@@ -42,6 +44,18 @@ public abstract class Enemy : MonoBehaviour
     protected virtual void Awake()
     {
         Prepare();
+    }
+
+    private void OnEnable()
+    {
+        _planning.RouteConfirmed += OnRouteConfirmed;
+    }
+
+    private void OnDisable()
+    {
+        _planning.RouteConfirmed -= OnRouteConfirmed;
+        StopAllCoroutines();
+        _isTurnActive = false;
     }
 
     public void Spawn(Board board, GridMapper mapper, BoardHighlighter highlighter, Vector2Int cell)
@@ -81,6 +95,8 @@ public abstract class Enemy : MonoBehaviour
         }
 
         IsSpawned = false;
+        _isTurnActive = false;
+        _planning.End();
         _health.Died -= OnDied;
         _board.TryRemove(_unit);
         _board = null;
@@ -91,21 +107,15 @@ public abstract class Enemy : MonoBehaviour
         Behaviour = null;
     }
 
-    public IEnumerator TakeTurn()
+    public void BeginTurn()
     {
-        if (!IsSpawned)
+        if (!IsSpawned || _isTurnActive)
         {
-            yield break;
+            return;
         }
 
-        IReadOnlyList<Vector2Int> route = null;
-
-        yield return _planning.Plan(_board, _mapper, _highlighter, Cell, Behaviour.Steps, r => route = r);
-
-        if (route != null)
-        {
-            yield return FollowRoute(route);
-        }
+        _isTurnActive = true;
+        _planning.Begin(_board, _mapper, _highlighter, Cell, Behaviour.Steps);
     }
 
     protected abstract EnemyBehaviour CreateBehaviour();
@@ -113,6 +123,28 @@ public abstract class Enemy : MonoBehaviour
     protected virtual void OnDied()
     {
         DespawnRequested?.Invoke(this);
+    }
+
+    private void OnRouteConfirmed(IReadOnlyList<Vector2Int> route)
+    {
+        if (!_isTurnActive || !IsSpawned)
+        {
+            return;
+        }
+
+        StartCoroutine(ExecuteRoute(route));
+    }
+
+    private IEnumerator ExecuteRoute(IReadOnlyList<Vector2Int> route)
+    {
+        yield return FollowRoute(route);
+
+        _isTurnActive = false;
+
+        if (IsSpawned)
+        {
+            TurnFinished?.Invoke();
+        }
     }
 
     private IEnumerator FollowRoute(IReadOnlyList<Vector2Int> route)
