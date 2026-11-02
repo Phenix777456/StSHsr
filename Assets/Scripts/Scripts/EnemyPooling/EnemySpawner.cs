@@ -1,13 +1,19 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public sealed class EnemySpawner : MonoBehaviour
 {
     [SerializeField] private EnemyPool _pool;
+    [SerializeField] private BoardHighlighter _highlighter;
     [SerializeField] private Vector2Int[] _startCells;
+
+    private readonly List<Enemy> _active = new List<Enemy>();
 
     private Board _board;
     private GridMapper _mapper;
+
+    public IReadOnlyList<Enemy> Active => _active;
 
     public void Initialize(Board board, GridMapper mapper)
     {
@@ -44,7 +50,7 @@ public sealed class EnemySpawner : MonoBehaviour
 
         try
         {
-            instance.Spawn(_board, _mapper, cell);
+            instance.Spawn(_board, _mapper, _highlighter, cell);
             instance.gameObject.SetActive(true);
         }
         catch
@@ -54,8 +60,16 @@ public sealed class EnemySpawner : MonoBehaviour
             throw;
         }
 
+        _active.Add(instance);
+        instance.DespawnRequested += OnEnemyDespawnRequested;
         enemy = instance;
 
         return true;
+    }
+
+    private void OnEnemyDespawnRequested(Enemy enemy)
+    {
+        enemy.DespawnRequested -= OnEnemyDespawnRequested;
+        _active.Remove(enemy);
     }
 }
