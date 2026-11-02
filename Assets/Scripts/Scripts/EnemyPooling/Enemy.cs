@@ -24,18 +24,7 @@ public abstract class Enemy : MonoBehaviour
 
     public bool IsSpawned { get; private set; }
 
-    public Vector2Int Cell
-    {
-        get
-        {
-            if (_unit == null)
-            {
-                throw new InvalidOperationException("Enemy is not spawned.");
-            }
-
-            return _unit.Position;
-        }
-    }
+    public Vector2Int Cell => _unit.Position;
 
     protected EnemyView View { get; private set; }
 
@@ -192,5 +181,33 @@ public abstract class Enemy : MonoBehaviour
         _planning = GetComponent<EnemyRoutePlanningSession>();
         View = GetComponent<EnemyView>();
         _isPrepared = true;
+    }
+
+    public IEnumerator TakeTurn()
+    {
+        if (!IsSpawned)
+            yield break;
+
+        IReadOnlyList<Vector2Int> route = Behaviour.PlanRoute(_board, Cell);
+
+        for (int i = 1; i < route.Count; i++)
+        {
+            Vector2Int target = route[i];
+            StepKind step = _stepResolver.Resolve(_unit, target, out Unit occupant);
+
+            if (step == StepKind.Blocked)
+                yield break;
+
+            if (step == StepKind.Attack)
+            {
+                occupant.Damageable.TakeDamage(new DamageInfo(_damage));
+                yield break; 
+            }
+
+            if (!_board.TryMove(_unit, target))
+                yield break;
+
+            yield return _mover.MoveTo(_mapper.CellToWorld(target));
+        }
     }
 }

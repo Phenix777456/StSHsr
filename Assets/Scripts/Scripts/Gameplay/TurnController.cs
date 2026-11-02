@@ -49,14 +49,11 @@ public sealed class TurnController : MonoBehaviour
         _player.BeginTurn();
     }
 
-    private void OnPlayerTurnFinished()
-    {
-        StartCoroutine(EnemyPhase());
-    }
+    private void OnPlayerTurnFinished() => StartCoroutine(EnemyPhase());
 
     private IEnumerator EnemyPhase()
     {
-        var enemies = new List<Enemy>(_enemySpawner.Active);
+        _player.BeginTurn();
 
         foreach (Enemy enemy in enemies)
         {
