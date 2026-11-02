@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -18,7 +17,10 @@ public sealed class TurnController : MonoBehaviour
     [SerializeField] private PlayerActor _playerActor;
     [SerializeField] private EnemySpawner _enemySpawner;
 
+    private readonly HashSet<Enemy> _movingEnemies = new HashSet<Enemy>();
+
     private IPlayerActor _player;
+    private bool _isPlayerMoving;
 
     private void Awake()
     {
@@ -27,11 +29,13 @@ public sealed class TurnController : MonoBehaviour
 
     private void OnEnable()
     {
+        _player.RouteStarted += OnPlayerRouteStarted;
         _player.TurnFinished += OnPlayerTurnFinished;
     }
 
     private void OnDisable()
     {
+        _player.RouteStarted -= OnPlayerRouteStarted;
         _player.TurnFinished -= OnPlayerTurnFinished;
         StopAllCoroutines();
     }
@@ -46,33 +50,71 @@ public sealed class TurnController : MonoBehaviour
         _enemySpawner.Initialize(board, mapper);
         _enemySpawner.SpawnInitial();
 
-        _player.BeginTurn();
+        BeginRound();
     }
 
-    private void OnPlayerTurnFinished() => StartCoroutine(EnemyPhase());
-
-    private IEnumerator EnemyPhase()
+    private void BeginRound()
     {
-        _player.BeginTurn();
-
-        foreach (Enemy enemy in enemies)
+        foreach (Enemy enemy in _enemySpawner.Active)
         {
-            yield return RunEnemyTurn(enemy);
+            enemy.PlanTurn();
         }
 
         _player.BeginTurn();
     }
 
-    private static IEnumerator RunEnemyTurn(Enemy enemy)
+    private void OnPlayerRouteStarted()
     {
-        bool isFinished = false;
-        Action onFinished = () => isFinished = true;
+        var enemies = new List<Enemy>(_enemySpawner.Active);
 
-        enemy.TurnFinished += onFinished;
-        enemy.BeginTurn();
+        _isPlayerMoving = true;
+        _movingEnemies.Clear();
 
-        yield return new WaitUntil(() => isFinished || !enemy.IsSpawned);
+        foreach (Enemy enemy in enemies)
+        {
+            enemy.TurnFinished += OnEnemyTurnFinished;
+            _movingEnemies.Add(enemy);
 
-        enemy.TurnFinished -= onFinished;
+            if (!enemy.TryStartMove())
+            {
+                _movingEnemies.Remove(enemy);
+            }
+        }
+
+        StartCoroutine(FinishRound(enemies));
+    }
+
+    private void OnPlayerTurnFinished()
+    {
+        _isPlayerMoving = false;
+    }
+
+    private void OnEnemyTurnFinished(Enemy enemy)
+    {
+        _movingEnemies.Remove(enemy);
+    }
+
+    private IEnumerator FinishRound(List<Enemy> enemies)
+    {
+        yield return new WaitUntil(IsMovePhaseFinished);
+
+        foreach (Enemy enemy in enemies)
+        {
+            enemy.TurnFinished -= OnEnemyTurnFinished;
+        }
+
+        BeginRound();
+    }
+
+    private bool IsMovePhaseFinished()
+    {
+        if (_isPlayerMoving)
+        {
+            return false;
+        }
+
+        _movingEnemies.RemoveWhere(enemy => !enemy.IsSpawned);
+
+        return _movingEnemies.Count == 0;
     }
 }

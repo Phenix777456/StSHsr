@@ -19,6 +19,7 @@ public sealed class PlayerActor : MonoBehaviour, IPlayerActor
     private StepResolver _stepResolver;
     private bool _isTurnActive;
 
+    public event Action RouteStarted;
     public event Action TurnFinished;
 
     public Vector2Int Cell => _unit.Position;
@@ -84,6 +85,7 @@ public sealed class PlayerActor : MonoBehaviour, IPlayerActor
             return;
         }
 
+        RouteStarted?.Invoke();
         StartCoroutine(ExecuteRoute(new List<Vector2Int>(route)));
     }
 

@@ -3,7 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(Health), typeof(EnemyView), typeof(PathMover), typeof(EnemyRoutePlanningSession))]
+[RequireComponent(typeof(Health), typeof(EnemyView))]
+[RequireComponent(typeof(PathMover), typeof(EnemyRoutePlanningSession))]
 public abstract class Enemy : MonoBehaviour
 {
     [SerializeField, Min(1)] private int _damage = 1;
@@ -16,15 +17,27 @@ public abstract class Enemy : MonoBehaviour
     private BoardHighlighter _highlighter;
     private StepResolver _stepResolver;
     private Unit _unit;
+    private IReadOnlyList<Vector2Int> _plannedRoute;
     private bool _isPrepared;
-    private bool _isTurnActive;
+    private bool _isMoving;
 
     public event Action<Enemy> DespawnRequested;
-    public event Action TurnFinished;
+    public event Action<Enemy> TurnFinished;
 
     public bool IsSpawned { get; private set; }
 
-    public Vector2Int Cell => _unit.Position;
+    public Vector2Int Cell
+    {
+        get
+        {
+            if (_unit == null)
+            {
+                throw new InvalidOperationException("Enemy is not spawned.");
+            }
+
+            return _unit.Position;
+        }
+    }
 
     protected EnemyView View { get; private set; }
 
@@ -35,16 +48,10 @@ public abstract class Enemy : MonoBehaviour
         Prepare();
     }
 
-    private void OnEnable()
-    {
-        _planning.RouteConfirmed += OnRouteConfirmed;
-    }
-
     private void OnDisable()
     {
-        _planning.RouteConfirmed -= OnRouteConfirmed;
         StopAllCoroutines();
-        _isTurnActive = false;
+        _isMoving = false;
     }
 
     public void Spawn(Board board, GridMapper mapper, BoardHighlighter highlighter, Vector2Int cell)
@@ -84,8 +91,9 @@ public abstract class Enemy : MonoBehaviour
         }
 
         IsSpawned = false;
-        _isTurnActive = false;
-        _planning.End();
+        _isMoving = false;
+        _plannedRoute = null;
+        _planning.Clear();
         _health.Died -= OnDied;
         _board.TryRemove(_unit);
         _board = null;
@@ -96,15 +104,29 @@ public abstract class Enemy : MonoBehaviour
         Behaviour = null;
     }
 
-    public void BeginTurn()
+    public void PlanTurn()
     {
-        if (!IsSpawned || _isTurnActive)
+        if (!IsSpawned || _isMoving)
         {
             return;
         }
 
-        _isTurnActive = true;
-        _planning.Begin(_board, _mapper, _highlighter, Cell, Behaviour.Steps);
+        _plannedRoute = _planning.Plan(_board, _mapper, _highlighter, Cell, Behaviour.Steps);
+    }
+
+    public bool TryStartMove()
+    {
+        if (!IsSpawned || _isMoving || _plannedRoute == null)
+        {
+            return false;
+        }
+
+        _isMoving = true;
+        _planning.Clear();
+        StartCoroutine(Move(_plannedRoute));
+        _plannedRoute = null;
+
+        return true;
     }
 
     protected abstract EnemyBehaviour CreateBehaviour();
@@ -114,25 +136,15 @@ public abstract class Enemy : MonoBehaviour
         DespawnRequested?.Invoke(this);
     }
 
-    private void OnRouteConfirmed(IReadOnlyList<Vector2Int> route)
-    {
-        if (!_isTurnActive || !IsSpawned)
-        {
-            return;
-        }
-
-        StartCoroutine(ExecuteRoute(route));
-    }
-
-    private IEnumerator ExecuteRoute(IReadOnlyList<Vector2Int> route)
+    private IEnumerator Move(IReadOnlyList<Vector2Int> route)
     {
         yield return FollowRoute(route);
 
-        _isTurnActive = false;
+        _isMoving = false;
 
         if (IsSpawned)
         {
-            TurnFinished?.Invoke();
+            TurnFinished?.Invoke(this);
         }
     }
 
@@ -181,33 +193,5 @@ public abstract class Enemy : MonoBehaviour
         _planning = GetComponent<EnemyRoutePlanningSession>();
         View = GetComponent<EnemyView>();
         _isPrepared = true;
-    }
-
-    public IEnumerator TakeTurn()
-    {
-        if (!IsSpawned)
-            yield break;
-
-        IReadOnlyList<Vector2Int> route = Behaviour.PlanRoute(_board, Cell);
-
-        for (int i = 1; i < route.Count; i++)
-        {
-            Vector2Int target = route[i];
-            StepKind step = _stepResolver.Resolve(_unit, target, out Unit occupant);
-
-            if (step == StepKind.Blocked)
-                yield break;
-
-            if (step == StepKind.Attack)
-            {
-                occupant.Damageable.TakeDamage(new DamageInfo(_damage));
-                yield break; 
-            }
-
-            if (!_board.TryMove(_unit, target))
-                yield break;
-
-            yield return _mover.MoveTo(_mapper.CellToWorld(target));
-        }
     }
 }
