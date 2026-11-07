@@ -1,6 +1,3 @@
-namespace StSHsr.Battle
+public sealed class EnemyPuppet : BattlePuppet
 {
-    public sealed class EnemyPuppet : BattlePuppet
-    {
-    }
 }

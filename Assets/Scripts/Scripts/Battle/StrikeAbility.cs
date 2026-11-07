@@ -1,38 +1,35 @@
 using System.Collections;
 using UnityEngine;
 
-namespace StSHsr.Battle
+public sealed class StrikeAbility : IBattleAbility
 {
-    public sealed class StrikeAbility : IBattleAbility
+    private readonly float _legDuration;
+    private readonly float _reach;
+
+    public StrikeAbility(float legDuration = 0.25f, float reach = 0.6f)
     {
-        private readonly float _legDuration;
-        private readonly float _reach;
+        _legDuration = legDuration;
+        _reach = reach;
+    }
 
-        public StrikeAbility(float legDuration = 0.25f, float reach = 0.6f)
+    public IEnumerator Execute(BattlePuppet self, BattlePuppet target)
+    {
+        Vector3 start = self.transform.position;
+        Vector3 hitPoint = Vector3.Lerp(start, target.transform.position, _reach);
+
+        yield return MoveTo(self.transform, start, hitPoint);
+        self.NotifyHit();
+        yield return MoveTo(self.transform, hitPoint, start);
+    }
+
+    private IEnumerator MoveTo(Transform subject, Vector3 from, Vector3 to)
+    {
+        for (float t = 0f; t < _legDuration; t += Time.deltaTime)
         {
-            _legDuration = legDuration;
-            _reach = reach;
+            subject.position = Vector3.Lerp(from, to, t / _legDuration);
+            yield return null;
         }
 
-        public IEnumerator Execute(BattlePuppet self, BattlePuppet target)
-        {
-            Vector3 start = self.transform.position;
-            Vector3 hitPoint = Vector3.Lerp(start, target.transform.position, _reach);
-
-            yield return MoveTo(self.transform, start, hitPoint);
-            self.NotifyHit();
-            yield return MoveTo(self.transform, hitPoint, start);
-        }
-
-        private IEnumerator MoveTo(Transform subject, Vector3 from, Vector3 to)
-        {
-            for (float t = 0f; t < _legDuration; t += Time.deltaTime)
-            {
-                subject.position = Vector3.Lerp(from, to, t / _legDuration);
-                yield return null;
-            }
-
-            subject.position = to;
-        }
+        subject.position = to;
     }
 }

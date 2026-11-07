@@ -1,29 +1,26 @@
 using UnityEngine;
 
-namespace StSHsr.Battle
+public sealed class BattleStage : MonoBehaviour
 {
-    public sealed class BattleStage : MonoBehaviour
+    [SerializeField] private Transform _firstSlot;
+    [SerializeField] private Transform _secondSlot;
+    [SerializeField] private Camera _stageCamera;
+
+    public Transform FirstSlot => _firstSlot;
+    public Transform SecondSlot => _secondSlot;
+
+    private void Awake()
     {
-        [SerializeField] private Transform _firstSlot;
-        [SerializeField] private Transform _secondSlot;
-        [SerializeField] private Camera _stageCamera;
+        Hide();
+    }
 
-        public Transform FirstSlot => _firstSlot;
-        public Transform SecondSlot => _secondSlot;
+    public void Show()
+    {
+        _stageCamera.enabled = true;
+    }
 
-        private void Awake()
-        {
-            Hide();
-        }
-
-        public void Show()
-        {
-            _stageCamera.enabled = true;
-        }
-
-        public void Hide()
-        {
-            _stageCamera.enabled = false;
-        }
+    public void Hide()
+    {
+        _stageCamera.enabled = false;
     }
 }

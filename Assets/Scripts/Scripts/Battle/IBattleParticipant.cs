@@ -1,12 +1,9 @@
 using System;
 using UnityEngine;
 
-namespace StSHsr.Battle
+public interface IBattleParticipant
 {
-    public interface IBattleParticipant
-    {
-        event Action<IBattleParticipant> AttackDeclared;
+    event Action<IBattleParticipant> AttackDeclared;
 
-        BattlePuppet CreatePuppet(Transform slot);
-    }
+    BattlePuppet CreatePuppet(Transform slot);
 }

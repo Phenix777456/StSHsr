@@ -1,9 +1,6 @@
 using System.Collections;
 
-namespace StSHsr.Battle
+public interface IBattleAbility
 {
-    public interface IBattleAbility
-    {
-        IEnumerator Execute(BattlePuppet self, BattlePuppet target);
-    }
+    IEnumerator Execute(BattlePuppet self, BattlePuppet target);
 }
